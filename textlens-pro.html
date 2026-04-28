@@ -9,6 +9,7 @@
 <title>Typo — Edit Text in Photos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
@@ -178,37 +179,6 @@ html, body {
 }
 .btn-secondary:active { background: var(--card); color: var(--text); }
 
-/* API key input */
-.api-key-wrap {
-  width: 100%;
-  background: var(--card);
-  border: 1.5px solid var(--border2);
-  border-radius: var(--radius);
-  display: flex; align-items: center;
-  overflow: hidden;
-  transition: border-color 0.18s;
-}
-.api-key-wrap:focus-within { border-color: var(--accent); }
-.api-key-wrap .ak-icon { padding: 0 12px; font-size: 16px; flex-shrink: 0; }
-#api-key-input {
-  flex: 1; padding: 14px 0;
-  background: transparent; border: none; outline: none;
-  font-family: var(--font); font-size: 14px; color: var(--text);
-  -webkit-appearance: none;
-}
-#api-key-input::placeholder { color: var(--muted); }
-.ak-save {
-  padding: 0 14px; height: 100%;
-  background: transparent; border: none; border-left: 1px solid var(--border);
-  color: var(--accent); font-family: var(--font); font-size: 13px; font-weight: 600;
-  cursor: pointer; appearance: none; -webkit-appearance: none;
-  transition: background 0.15s;
-}
-.ak-save:active { background: rgba(255,107,53,0.1); }
-.ak-hint {
-  font-size: 11px; color: var(--muted); text-align: center; line-height: 1.5;
-}
-.ak-hint a { color: var(--sub); text-decoration: underline; }
 
 #file-input { display: none; }
 
@@ -625,13 +595,7 @@ html, body {
   </div>
 
   <div class="cta-area">
-    <div class="api-key-wrap">
-      <span class="ak-icon">🔑</span>
-      <input id="api-key-input" type="password" placeholder="Paste your Anthropic API key…" autocomplete="off" spellcheck="false">
-      <button class="ak-save" onclick="saveKey()">Save</button>
-    </div>
-    <p class="ak-hint">Your key is stored only on your device. Get one at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></p>
-    <button class="btn-primary" onclick="pickPhoto()">Choose Photo</button>
+    <button class="btn-primary" onclick="document.getElementById('file-input').click()">Choose Photo</button>
     <button class="btn-secondary" id="paste-btn">Paste from Clipboard</button>
   </div>
 
@@ -754,25 +718,6 @@ let blocks = [];
 let selId   = null;
 let imgNW=0,imgNH=0, imgDW=0,imgDH=0, imgOX=0,imgOY=0;
 
-/* ── API Key ────────────────────────────────────────────────────────────── */
-function getKey() { return localStorage.getItem('typo_api_key') || ''; }
-function saveKey() {
-  const v = document.getElementById('api-key-input').value.trim();
-  if (!v) { toast('Paste your API key first'); return; }
-  localStorage.setItem('typo_api_key', v);
-  document.getElementById('api-key-input').value = '•'.repeat(Math.min(v.length, 32));
-  toast('✓ API key saved');
-}
-function pickPhoto() {
-  if (!getKey()) { toast('Enter your Anthropic API key first'); return; }
-  document.getElementById('file-input').click();
-}
-// Pre-fill masked key on load
-window.addEventListener('DOMContentLoaded', () => {
-  const k = getKey();
-  if (k) document.getElementById('api-key-input').value = '•'.repeat(Math.min(k.length, 32));
-});
-
 /* ── Screens ────────────────────────────────────────────────────────────── */
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -786,7 +731,6 @@ document.getElementById('file-input').addEventListener('change', e => {
   e.target.value = '';
 });
 document.getElementById('paste-btn').addEventListener('click', async () => {
-  if (!getKey()) { toast('Enter your Anthropic API key first'); return; }
   try {
     const items = await navigator.clipboard.read();
     for (const item of items) {
@@ -820,118 +764,78 @@ function loadFile(file) {
   reader.readAsDataURL(file);
 }
 
-/* ── Image resize helper (keeps iPhone photos under API limit) ──────────── */
-async function resizeImage(dataUrl, maxDim = 1600) {
-  return new Promise(res => {
-    const img = new Image();
-    img.onload = () => {
-      let w = img.naturalWidth, h = img.naturalHeight;
-      if (w <= maxDim && h <= maxDim) { res(dataUrl); return; }
-      const scale = maxDim / Math.max(w, h);
-      w = Math.round(w * scale); h = Math.round(h * scale);
-      const cv = document.createElement('canvas');
-      cv.width = w; cv.height = h;
-      cv.getContext('2d').drawImage(img, 0, 0, w, h);
-      res(cv.toDataURL('image/jpeg', 0.92));
-    };
-    img.src = dataUrl;
-  });
-}
-
-/* ── Analysis ────────────────────────────────────────────────────────────── */
+/* ── Analysis (Tesseract.js — runs fully in browser, no API key needed) ──── */
 async function analyzeImage() {
   blocks = []; selId = null;
-  setLoadStatus('Preparing image…');
-
-  // Resize large iPhone photos before sending to API
-  let sendDataUrl;
-  try {
-    sendDataUrl = await resizeImage(imgDataUrl, 1600);
-    const kb = Math.round(sendDataUrl.length * 0.75 / 1024);
-    setLoadStatus('Scanning text… (' + kb + ' KB)');
-  } catch(e) {
-    sendDataUrl = imgDataUrl;
-    setLoadStatus('Scanning text…');
-  }
-
-  const base64 = sendDataUrl.split(',')[1];
-  const mime   = 'image/jpeg';
-
-  const prompt = `You are a precise image OCR and layout analyzer.
-Detect ALL visible text in this image. Return a JSON array only — no markdown, no explanation.
-Each element:
-{
-  "id": 1,
-  "text": "exact text",
-  "x": 0.12,
-  "y": 0.05,
-  "w": 0.40,
-  "h": 0.08,
-  "fontSize": 52,
-  "fontWeight": "700",
-  "fontStyle": "normal",
-  "fontFamily": "sans-serif",
-  "color": "#ffffff",
-  "textAlign": "left"
-}
-If no text found return [].`;
+  setLoadStatus('Loading OCR engine…');
 
   try {
-    setLoadStatus('Calling AI… please wait');
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': getKey(),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 2000,
-        messages: [{role:'user', content:[
-          {type:'image', source:{type:'base64', media_type: mime, data: base64}},
-          {type:'text',  text: prompt}
-        ]}]
-      })
+    const worker = await Tesseract.createWorker('eng', 1, {
+      logger: m => {
+        if (m.status === 'recognizing text')
+          setLoadStatus('Reading text… ' + Math.round(m.progress * 100) + '%');
+        else if (m.status === 'loading language traineddata')
+          setLoadStatus('Loading language data…');
+        else if (m.status === 'initializing api')
+          setLoadStatus('Initializing OCR…');
+      }
     });
 
-    setLoadStatus('Processing response…');
-    const data = await res.json();
+    const { data } = await worker.recognize(imgDataUrl);
+    await worker.terminate();
 
-    // Show API errors on screen
-    if (data.error) {
-      const msg = data.error.message || JSON.stringify(data.error);
-      console.error('API error:', msg);
-      setLoadStatus('⚠ ' + msg.slice(0, 150));
-      setTimeout(() => showScreen('screen-home'), 5000);
-      return;
-    }
+    // Build canvas for color sampling
+    const img = new Image();
+    await new Promise(r => { img.onload = r; img.src = imgDataUrl; });
+    const W = img.naturalWidth, H = img.naturalHeight;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    ctx.drawImage(img, 0, 0);
 
-    const raw = (data.content||[]).find(c=>c.type==='text')?.text || '[]';
-    setLoadStatus('Detected ' + (raw.match(/"text"/g)||[]).length + ' text blocks…');
+    blocks = data.lines
+      .filter(l => l.text.trim().length > 0 && l.confidence > 30)
+      .map((l, i) => {
+        const { x0, y0, x1, y1 } = l.bbox;
+        const bw = x1 - x0, bh = y1 - y0;
+        return {
+          id: String(i + 1),
+          text: l.text.trim(),
+          x: x0 / W, y: y0 / H,
+          w: bw / W,  h: bh / H,
+          fontSize: Math.round((bh / H) * 850),
+          fontWeight: '400',
+          fontStyle: 'normal',
+          fontFamily: 'sans-serif',
+          color: sampleTextColor(ctx, x0, y0, bw, bh),
+          textAlign: 'left',
+          edited: null, hidden: false, deleted: false
+        };
+      });
 
-    try {
-      const cleaned = raw.replace(/```json|```/g,'').trim();
-      const parsed = JSON.parse(cleaned);
-      blocks = (Array.isArray(parsed) ? parsed : []).map((b,i) => ({
-        ...b,
-        id: String(b.id || i+1),
-        edited: null,
-        hidden: false,
-        deleted: false
-      }));
-    } catch(parseErr) {
-      console.error('Parse error:', parseErr, 'Raw:', raw);
-      blocks = [];
-    }
-
+    setLoadStatus('Found ' + blocks.length + ' text blocks');
     openEditor();
   } catch(err) {
-    console.error('Fetch error:', err);
+    console.error('OCR error:', err);
     setLoadStatus('⚠ ' + String(err).slice(0, 150));
-    setTimeout(() => showScreen('screen-home'), 5000);
+    setTimeout(() => showScreen('screen-home'), 4000);
   }
+}
+
+function sampleTextColor(ctx, x, y, w, h) {
+  try {
+    const sx = Math.max(0, Math.round(x)), sy = Math.max(0, Math.round(y));
+    const sw = Math.min(Math.round(w), ctx.canvas.width - sx);
+    const sh = Math.min(Math.round(h), ctx.canvas.height - sy);
+    if (sw <= 0 || sh <= 0) return '#000000';
+    const d = ctx.getImageData(sx, sy, sw, sh).data;
+    let lum = 0, count = 0;
+    for (let i = 0; i < d.length; i += 16) {
+      lum += 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+      count++;
+    }
+    return (count && lum / count > 128) ? '#000000' : '#ffffff';
+  } catch { return '#000000'; }
 }
 
 function setLoadStatus(msg) {

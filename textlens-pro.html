@@ -821,6 +821,9 @@ async function analyzeImage() {
   }
 }
 
+const toHex = (r, g, b) =>
+  '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+
 /* ── Pixel-based style analysis ──────────────────────────────────────────── */
 function analyzeBlockStyle(ctx, x0, y0, bw, bh) {
   const sx = Math.max(0, Math.round(x0)), sy = Math.max(0, Math.round(y0));
@@ -855,8 +858,6 @@ function analyzeBlockStyle(ctx, x0, y0, bw, bh) {
     }
   }
 
-  const toHex = (r, g, b) =>
-    '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
 
   // Foreground color: mean of text pixels
   const color = textCount > 5

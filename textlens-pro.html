@@ -764,13 +764,42 @@ function loadFile(file) {
   reader.readAsDataURL(file);
 }
 
+/* ── Image resize helper (keeps iPhone photos under API limit) ──────────── */
+async function resizeImage(dataUrl, maxDim = 1600) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w <= maxDim && h <= maxDim) { res(dataUrl); return; }
+      const scale = maxDim / Math.max(w, h);
+      w = Math.round(w * scale); h = Math.round(h * scale);
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      res(cv.toDataURL('image/jpeg', 0.92));
+    };
+    img.src = dataUrl;
+  });
+}
+
 /* ── Analysis ────────────────────────────────────────────────────────────── */
 async function analyzeImage() {
   blocks = []; selId = null;
-  setLoadStatus('Reading font styles…');
+  setLoadStatus('Preparing image…');
 
-  const base64 = imgDataUrl.split(',')[1];
-  const mime   = (imgDataUrl.match(/data:(image\/[^;]+);/) || [])[1] || 'image/jpeg';
+  // Resize large iPhone photos before sending to API
+  let sendDataUrl;
+  try {
+    sendDataUrl = await resizeImage(imgDataUrl, 1600);
+    const kb = Math.round(sendDataUrl.length * 0.75 / 1024);
+    setLoadStatus('Scanning text… (' + kb + ' KB)');
+  } catch(e) {
+    sendDataUrl = imgDataUrl;
+    setLoadStatus('Scanning text…');
+  }
+
+  const base64 = sendDataUrl.split(',')[1];
+  const mime   = 'image/jpeg';
 
   const prompt = `You are a precise image OCR and layout analyzer.
 Detect ALL visible text in this image. Return a JSON array only — no markdown, no explanation.
@@ -778,21 +807,22 @@ Each element:
 {
   "id": 1,
   "text": "exact text",
-  "x": 0.12,   // left edge as fraction of image width 0-1
-  "y": 0.05,   // top  edge as fraction of image height 0-1
-  "w": 0.40,   // width  fraction
-  "h": 0.08,   // height fraction
-  "fontSize": 52,      // px if image height were 1000px
-  "fontWeight": "700", // "400" normal | "700" bold | "300" light etc
-  "fontStyle": "normal", // "normal" | "italic"
-  "fontFamily": "sans-serif", // "sans-serif"|"serif"|"monospace"|"display"|"handwriting"
-  "color": "#ffffff",  // best hex estimate
-  "textAlign": "left"  // "left"|"center"|"right"
+  "x": 0.12,
+  "y": 0.05,
+  "w": 0.40,
+  "h": 0.08,
+  "fontSize": 52,
+  "fontWeight": "700",
+  "fontStyle": "normal",
+  "fontFamily": "sans-serif",
+  "color": "#ffffff",
+  "textAlign": "left"
 }
 If no text found return [].`;
 
   try {
-    const res  = await fetch('https://api.anthropic.com/v1/messages', {
+    setLoadStatus('Calling AI… please wait');
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -803,32 +833,47 @@ If no text found return [].`;
         model: 'claude-sonnet-4-5',
         max_tokens: 2000,
         messages: [{role:'user', content:[
-          {type:'image', source:{type:'base64', media_type:mime, data:base64}},
+          {type:'image', source:{type:'base64', media_type: mime, data: base64}},
           {type:'text',  text: prompt}
         ]}]
       })
     });
+
+    setLoadStatus('Processing response…');
     const data = await res.json();
 
-    // Surface API errors clearly on the loading screen
+    // Show API errors on screen
     if (data.error) {
       const msg = data.error.message || JSON.stringify(data.error);
       console.error('API error:', msg);
-      setLoadStatus('⚠ ' + msg.slice(0, 120));
-      setTimeout(() => showScreen('screen-home'), 4000);
+      setLoadStatus('⚠ ' + msg.slice(0, 150));
+      setTimeout(() => showScreen('screen-home'), 5000);
       return;
     }
 
-    const raw  = (data.content||[]).find(c=>c.type==='text')?.text || '[]';
+    const raw = (data.content||[]).find(c=>c.type==='text')?.text || '[]';
+    setLoadStatus('Detected ' + (raw.match(/"text"/g)||[]).length + ' text blocks…');
+
     try {
-      blocks = JSON.parse(raw.replace(/```json|```/g,'').trim())
-        .map((b,i) => ({...b, id:String(b.id||i+1), edited:null, hidden:false, deleted:false}));
-    } catch { blocks = []; }
+      const cleaned = raw.replace(/```json|```/g,'').trim();
+      const parsed = JSON.parse(cleaned);
+      blocks = (Array.isArray(parsed) ? parsed : []).map((b,i) => ({
+        ...b,
+        id: String(b.id || i+1),
+        edited: null,
+        hidden: false,
+        deleted: false
+      }));
+    } catch(parseErr) {
+      console.error('Parse error:', parseErr, 'Raw:', raw);
+      blocks = [];
+    }
+
     openEditor();
   } catch(err) {
     console.error('Fetch error:', err);
-    setLoadStatus('⚠ Network error — ' + String(err).slice(0, 80));
-    setTimeout(() => showScreen('screen-home'), 4000);
+    setLoadStatus('⚠ ' + String(err).slice(0, 150));
+    setTimeout(() => showScreen('screen-home'), 5000);
   }
 }
 

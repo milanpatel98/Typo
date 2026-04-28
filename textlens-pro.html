@@ -809,6 +809,7 @@ async function analyzeImage() {
           fontStyle: style.fontStyle,
           fontFamily: 'sans-serif',
           color: style.color,
+          bgColor: style.bgColor,
           textAlign: 'left',
           edited: null, hidden: false, deleted: false
         };
@@ -840,24 +841,35 @@ function analyzeBlockStyle(ctx, x0, y0, bw, bh) {
   const avgLum = totalLum / pixelCount;
   const textIsDark = avgLum > 128;
 
-  // Build binary text mask and accumulate color
+  // Build binary text mask and accumulate text + background colors
   const mask = new Uint8Array(pixelCount);
-  let textCount = 0, rSum = 0, gSum = 0, bSum = 0;
+  let textCount = 0, rT = 0, gT = 0, bT = 0;
+  let bgCount   = 0, rB = 0, gB = 0, bB = 0;
   for (let j = 0; j < pixelCount; j++) {
     const i = j * 4;
     const lum = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
     const isText = textIsDark ? lum < avgLum * 0.72 : lum > avgLum + (255 - avgLum) * 0.28;
     if (isText) {
       mask[j] = 1; textCount++;
-      rSum += d[i]; gSum += d[i+1]; bSum += d[i+2];
+      rT += d[i]; gT += d[i+1]; bT += d[i+2];
+    } else {
+      bgCount++;
+      rB += d[i]; gB += d[i+1]; bB += d[i+2];
     }
   }
 
-  // Color: mean of classified text pixels
+  const toHex = (r, g, b) =>
+    '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+
+  // Foreground color: mean of text pixels
   const color = textCount > 5
-    ? '#' + [rSum, gSum, bSum]
-        .map(v => Math.round(v / textCount).toString(16).padStart(2, '0')).join('')
+    ? toHex(rT / textCount, gT / textCount, bT / textCount)
     : (textIsDark ? '#000000' : '#ffffff');
+
+  // Background color: mean of non-text pixels
+  const bgColor = bgCount > 5
+    ? toHex(rB / bgCount, gB / bgCount, bB / bgCount)
+    : (textIsDark ? '#ffffff' : '#000000');
 
   // Bold: higher stroke density = bolder
   const density = textCount / pixelCount;
@@ -884,7 +896,7 @@ function analyzeBlockStyle(ctx, x0, y0, bw, bh) {
     }
   }
 
-  return { fontWeight, fontStyle, color };
+  return { fontWeight, fontStyle, color, bgColor };
 }
 
 function setLoadStatus(msg) {
@@ -936,6 +948,7 @@ function renderOverlays() {
     const h  = b.h * imgNH * sc;
     const fs = (b.fontSize / 1000) * imgNH * sc;
 
+    const isEdited = b.edited !== null;
     el.style.cssText = `
       left:${x}px; top:${y}px; width:${w}px; min-height:${h}px;
       font-size:${fs}px;
@@ -944,22 +957,15 @@ function renderOverlays() {
       font-style:${b.fontStyle||'normal'};
       color:${b.color||'#fff'};
       text-align:${b.textAlign||'left'};
+      ${isEdited ? `background:${b.bgColor||'#fff'};padding:2px 4px;` : ''}
     `;
-    el.textContent = b.edited !== null ? b.edited : b.text;
-    el.addEventListener('click', () => { selectBlock(b.id); });
-    el.addEventListener('dblclick', () => { selectBlock(b.id); openSheet(); });
+    el.textContent = isEdited ? b.edited : b.text;
 
-    // touch: single tap selects, double tap (300ms) opens sheet
-    let tapTimer=null, tapCount=0;
+    // Single tap → select + open edit sheet immediately
+    el.addEventListener('click', () => { selectBlock(b.id); openSheet(); });
     el.addEventListener('touchend', ev => {
       ev.preventDefault();
-      tapCount++;
-      if (tapCount===1) {
-        tapTimer = setTimeout(()=>{ tapCount=0; selectBlock(b.id); }, 280);
-      } else {
-        clearTimeout(tapTimer); tapCount=0;
-        selectBlock(b.id); openSheet();
-      }
+      selectBlock(b.id); openSheet();
     });
     layer.appendChild(el);
   });
@@ -1096,37 +1102,24 @@ async function exportImage() {
     const ctx=cv.getContext('2d');
     ctx.drawImage(img,0,0);
 
-    // inpaint deleted/hidden blocks
+    // erase deleted/hidden blocks with their background color
     blocks.filter(b=>b.deleted||b.hidden).forEach(b=>{
       const x=b.x*img.naturalWidth, y=b.y*img.naturalHeight;
       const w=b.w*img.naturalWidth, h=b.h*img.naturalHeight;
-      const pad=Math.max(8,h*0.6), srcY=Math.max(0,y-pad);
-      if(srcY<y){
-        const oc=document.createElement('canvas'); oc.width=w; oc.height=h;
-        const ox=oc.getContext('2d'); ox.filter='blur(4px)';
-        ox.drawImage(cv,x,srcY,w,pad,0,0,w,h);
-        ctx.drawImage(oc,x,y);
-      } else {
-        const d=ctx.getImageData(Math.max(0,x-6),Math.max(0,y-6),Math.min(w+12,img.naturalWidth),Math.min(h+12,img.naturalHeight));
-        let r=0,g=0,b2=0,c=0;
-        for(let i=0;i<d.data.length;i+=4){r+=d.data[i];g+=d.data[i+1];b2+=d.data[i+2];c++;}
-        ctx.fillStyle=c?`rgb(${r/c|0},${g/c|0},${b2/c|0})`:'#000';
-        ctx.fillRect(x,y,w,h);
-      }
+      ctx.fillStyle = b.bgColor || '#ffffff';
+      ctx.fillRect(x, y, w, h);
     });
 
-    // draw edited texts
+    // draw edited texts (erase original first, then draw new text)
     blocks.filter(b=>!b.deleted&&!b.hidden&&b.edited!==null).forEach(b=>{
       const x=b.x*img.naturalWidth, y=b.y*img.naturalHeight;
       const w=b.w*img.naturalWidth, h=b.h*img.naturalHeight;
       const fs=(b.fontSize/1000)*img.naturalHeight;
-      const pad=4; const srcY=Math.max(0,y-pad*3);
-      if(srcY<y){
-        const oc=document.createElement('canvas'); oc.width=w+pad*2; oc.height=h+pad*2;
-        const ox=oc.getContext('2d'); ox.filter='blur(2px)';
-        ox.drawImage(cv,x-pad,srcY,w+pad*2,h+pad*2,0,0,w+pad*2,h+pad*2);
-        ctx.drawImage(oc,x-pad,y-pad);
-      }
+
+      // Erase original text with background color
+      ctx.fillStyle = b.bgColor || '#ffffff';
+      ctx.fillRect(x, y, w, h);
+
       ctx.save();
       ctx.font=`${b.fontStyle==='italic'?'italic ':''} ${b.fontWeight||'400'} ${fs}px ${b.fontFamily||'sans-serif'}`;
       ctx.fillStyle=b.color||'#fff';

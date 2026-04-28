@@ -959,7 +959,8 @@ function renderOverlays() {
       text-align:${b.textAlign||'left'};
       ${isEdited ? `background:${b.bgColor||'#fff'};padding:2px 4px;` : ''}
     `;
-    el.textContent = isEdited ? b.edited : b.text;
+    // Only render text in the overlay when edited — the image already shows the original
+    el.textContent = isEdited ? b.edited : '';
 
     // Single tap → select + open edit sheet immediately
     el.addEventListener('click', () => { selectBlock(b.id); openSheet(); });

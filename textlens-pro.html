@@ -156,7 +156,7 @@ html, body {
   border: none; border-radius: var(--radius);
   color: #fff; font-family: var(--font); font-size: 16px; font-weight: 600;
   letter-spacing: -0.2px;
-  cursor: pointer; -webkit-appearance: none;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
   box-shadow: 0 8px 24px rgba(255,107,53,0.35);
   transition: transform 0.12s, box-shadow 0.12s;
   position: relative; overflow: hidden;
@@ -173,10 +173,42 @@ html, body {
   background: transparent;
   border: 1px solid var(--border2); border-radius: var(--radius);
   color: var(--sub); font-family: var(--font); font-size: 15px; font-weight: 500;
-  cursor: pointer; -webkit-appearance: none;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
   transition: background 0.15s, color 0.15s;
 }
 .btn-secondary:active { background: var(--card); color: var(--text); }
+
+/* API key input */
+.api-key-wrap {
+  width: 100%;
+  background: var(--card);
+  border: 1.5px solid var(--border2);
+  border-radius: var(--radius);
+  display: flex; align-items: center;
+  overflow: hidden;
+  transition: border-color 0.18s;
+}
+.api-key-wrap:focus-within { border-color: var(--accent); }
+.api-key-wrap .ak-icon { padding: 0 12px; font-size: 16px; flex-shrink: 0; }
+#api-key-input {
+  flex: 1; padding: 14px 0;
+  background: transparent; border: none; outline: none;
+  font-family: var(--font); font-size: 14px; color: var(--text);
+  -webkit-appearance: none;
+}
+#api-key-input::placeholder { color: var(--muted); }
+.ak-save {
+  padding: 0 14px; height: 100%;
+  background: transparent; border: none; border-left: 1px solid var(--border);
+  color: var(--accent); font-family: var(--font); font-size: 13px; font-weight: 600;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
+  transition: background 0.15s;
+}
+.ak-save:active { background: rgba(255,107,53,0.1); }
+.ak-hint {
+  font-size: 11px; color: var(--muted); text-align: center; line-height: 1.5;
+}
+.ak-hint a { color: var(--sub); text-decoration: underline; }
 
 #file-input { display: none; }
 
@@ -279,7 +311,7 @@ html, body {
   font-size: 13px; font-weight: 500;
   color: var(--sub); background: transparent;
   border: 1px solid transparent;
-  cursor: pointer; -webkit-appearance: none;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
   transition: all 0.18s;
   white-space: nowrap;
 }
@@ -356,7 +388,7 @@ html, body {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   padding: 10px 14px; border-radius: var(--radius-sm);
   background: var(--card); border: 1px solid var(--border);
-  cursor: pointer; -webkit-appearance: none;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
   transition: all 0.15s; color: var(--sub);
   min-width: 60px;
 }
@@ -478,7 +510,7 @@ html, body {
   flex: 1; height: 52px; border-radius: var(--radius);
   background: var(--accent-g); border: none;
   color: #fff; font-family: var(--font); font-size: 16px; font-weight: 600;
-  cursor: pointer; -webkit-appearance: none;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
   box-shadow: 0 6px 20px rgba(255,107,53,0.3);
   transition: transform 0.12s, box-shadow 0.12s;
   letter-spacing: -0.2px; position: relative; overflow: hidden;
@@ -593,9 +625,13 @@ html, body {
   </div>
 
   <div class="cta-area">
-    <button class="btn-primary" onclick="document.getElementById('file-input').click()">
-      Choose Photo
-    </button>
+    <div class="api-key-wrap">
+      <span class="ak-icon">🔑</span>
+      <input id="api-key-input" type="password" placeholder="Paste your Anthropic API key…" autocomplete="off" spellcheck="false">
+      <button class="ak-save" onclick="saveKey()">Save</button>
+    </div>
+    <p class="ak-hint">Your key is stored only on your device. Get one at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></p>
+    <button class="btn-primary" onclick="pickPhoto()">Choose Photo</button>
     <button class="btn-secondary" id="paste-btn">Paste from Clipboard</button>
   </div>
 
@@ -714,9 +750,28 @@ html, body {
 <script>
 /* ── State ─────────────────────────────────────────────────────────────── */
 let imgDataUrl = null, imgFileName = 'photo';
-let blocks = [];          // [{id,text,x,y,w,h,fontSize,fontWeight,fontStyle,fontFamily,color,textAlign,edited,hidden,deleted}]
+let blocks = [];
 let selId   = null;
 let imgNW=0,imgNH=0, imgDW=0,imgDH=0, imgOX=0,imgOY=0;
+
+/* ── API Key ────────────────────────────────────────────────────────────── */
+function getKey() { return localStorage.getItem('typo_api_key') || ''; }
+function saveKey() {
+  const v = document.getElementById('api-key-input').value.trim();
+  if (!v) { toast('Paste your API key first'); return; }
+  localStorage.setItem('typo_api_key', v);
+  document.getElementById('api-key-input').value = '•'.repeat(Math.min(v.length, 32));
+  toast('✓ API key saved');
+}
+function pickPhoto() {
+  if (!getKey()) { toast('Enter your Anthropic API key first'); return; }
+  document.getElementById('file-input').click();
+}
+// Pre-fill masked key on load
+window.addEventListener('DOMContentLoaded', () => {
+  const k = getKey();
+  if (k) document.getElementById('api-key-input').value = '•'.repeat(Math.min(k.length, 32));
+});
 
 /* ── Screens ────────────────────────────────────────────────────────────── */
 function showScreen(id) {
@@ -731,6 +786,7 @@ document.getElementById('file-input').addEventListener('change', e => {
   e.target.value = '';
 });
 document.getElementById('paste-btn').addEventListener('click', async () => {
+  if (!getKey()) { toast('Enter your Anthropic API key first'); return; }
   try {
     const items = await navigator.clipboard.read();
     for (const item of items) {
@@ -826,6 +882,7 @@ If no text found return [].`;
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-api-key': getKey(),
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },

@@ -232,17 +232,33 @@ html, body {
   pointer-events: none;
 }
 .txt-node {
-  position: absolute; cursor: pointer; pointer-events: auto;
-  border: 1.5px dashed transparent;
-  border-radius: 4px; padding: 2px 4px;
-  transition: border-color 0.15s, background 0.15s;
-  line-height: 1.15; white-space: pre-wrap;
+  position: absolute; cursor: text; pointer-events: auto;
+  border: 1.5px solid transparent;
+  border-radius: 3px; padding: 0;
+  line-height: 1.2; white-space: pre-wrap;
   touch-action: manipulation;
   transform-origin: top left;
+  outline: none;
+  word-break: break-word;
 }
-.txt-node:hover  { border-color: rgba(255,107,53,0.4); }
-.txt-node.sel    { border-color: var(--accent) !important; border-style: solid !important; }
-.txt-node.hidden-block { opacity: 0.2; pointer-events: none; }
+.txt-node:hover  { border-color: rgba(255,107,53,0.5); }
+.txt-node.sel    { border-color: var(--accent) !important; }
+.txt-node.editing { border-color: var(--accent) !important; border-style: solid !important; box-shadow: 0 0 0 2px rgba(255,107,53,0.25); }
+.txt-node.hidden-block { opacity: 0.15; pointer-events: none; }
+
+/* Inline done button */
+#inline-done {
+  position: fixed; right: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  z-index: 300;
+  background: var(--accent-g);
+  border: none; border-radius: 50px;
+  padding: 13px 28px;
+  color: #fff; font-family: var(--font); font-size: 15px; font-weight: 600;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
+  box-shadow: 0 6px 20px rgba(255,107,53,0.45);
+  display: none;
+}
 
 /* Scanning pulse overlay */
 .scan-line {
@@ -685,27 +701,8 @@ html, body {
   </div>
 </div>
 
-<!-- ═══════════════ EDIT SHEET ════════════════════════════════════════════ -->
-<div class="sheet-backdrop" id="backdrop" onclick="closeSheet()"></div>
-
-<div class="sheet" id="edit-sheet">
-  <div class="sheet-grabber"></div>
-  <div class="sheet-header">
-    <span class="sheet-title">Edit Text</span>
-    <button class="sheet-close" onclick="closeSheet()">✕</button>
-  </div>
-  <div class="sheet-body">
-    <!-- Style preview -->
-    <div class="style-row" id="style-row"></div>
-    <div class="divider"></div>
-    <span class="input-label">New text</span>
-    <textarea id="edit-textarea" rows="3" placeholder="Type replacement text…"></textarea>
-  </div>
-  <div class="sheet-actions">
-    <button class="act-del" onclick="deleteFromSheet()" title="Remove block">🗑</button>
-    <button class="act-apply" onclick="applyEdit()">Apply Changes</button>
-  </div>
-</div>
+<!-- Inline edit done button -->
+<button id="inline-done" onclick="finishEdit()">Done</button>
 
 <!-- Toast -->
 <div id="toast-bar"></div>
@@ -715,7 +712,7 @@ html, body {
 /* ── State ─────────────────────────────────────────────────────────────── */
 let imgDataUrl = null, imgFileName = 'photo';
 let blocks = [];
-let selId   = null;
+let selId = null, editingId = null;
 let imgNW=0,imgNH=0, imgDW=0,imgDH=0, imgOX=0,imgOY=0;
 
 /* ── Screens ────────────────────────────────────────────────────────────── */
@@ -866,10 +863,10 @@ function analyzeBlockStyle(ctx, x0, y0, bw, bh) {
     ? toHex(rT / textCount, gT / textCount, bT / textCount)
     : (textIsDark ? '#000000' : '#ffffff');
 
-  // Background color: mean of non-text pixels
-  const bgColor = bgCount > 5
-    ? toHex(rB / bgCount, gB / bgCount, bB / bgCount)
-    : (textIsDark ? '#ffffff' : '#000000');
+  // Background color: sample pixels in a border OUTSIDE the bbox (no text contamination)
+  const bgColor = sampleOutsideBg(ctx, sx, sy, sw, sh) ||
+    (bgCount > 5 ? toHex(rB / bgCount, gB / bgCount, bB / bgCount)
+                 : (textIsDark ? '#ffffff' : '#000000'));
 
   // Bold: higher stroke density = bolder
   const density = textCount / pixelCount;
@@ -897,6 +894,24 @@ function analyzeBlockStyle(ctx, x0, y0, bw, bh) {
   }
 
   return { fontWeight, fontStyle, color, bgColor };
+}
+
+function sampleOutsideBg(ctx, x, y, w, h) {
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  const m = Math.max(3, Math.round(h * 0.25));
+  let r = 0, g = 0, b = 0, n = 0;
+  const add = (sx, sy, sw, sh) => {
+    sx = Math.max(0, sx); sy = Math.max(0, sy);
+    sw = Math.min(sw, W - sx); sh = Math.min(sh, H - sy);
+    if (sw < 1 || sh < 1) return;
+    const d = ctx.getImageData(sx, sy, sw, sh).data;
+    for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i+1]; b += d[i+2]; n++; }
+  };
+  if (y >= m)         add(x, y - m, w, m);
+  if (y + h + m <= H) add(x, y + h, w, m);
+  if (x >= m)         add(x - m, y, m, h);
+  if (x + w + m <= W) add(x + w, y, m, h);
+  return n > 0 ? toHex(r / n, g / n, b / n) : null;
 }
 
 function setLoadStatus(msg) {
@@ -931,15 +946,17 @@ window.addEventListener('resize', () => { measureImg(); renderOverlays(); });
 /* ── Overlays ─────────────────────────────────────────────────────────────── */
 function renderOverlays() {
   const layer = document.getElementById('overlay-layer');
-  // remove all txt-node elements
   layer.querySelectorAll('.txt-node').forEach(n=>n.remove());
 
-  const scaleX = imgDW / imgNW, scaleY = imgDH / imgNH;
-  const sc = Math.min(scaleX, scaleY);
+  const sc = Math.min(imgDW / imgNW, imgDH / imgNH);
 
   blocks.filter(b=>!b.deleted).forEach(b => {
     const el = document.createElement('div');
-    el.className = 'txt-node' + (b.id===selId?' sel':'') + (b.hidden?' hidden-block':'');
+    let cls = 'txt-node';
+    if (b.id === selId)    cls += ' sel';
+    if (b.id === editingId) cls += ' editing';
+    if (b.hidden)           cls += ' hidden-block';
+    el.className = cls;
     el.dataset.id = b.id;
 
     const x  = b.x * imgNW * sc + imgOX;
@@ -948,29 +965,62 @@ function renderOverlays() {
     const h  = b.h * imgNH * sc;
     const fs = (b.fontSize / 1000) * imgNH * sc;
 
-    const isEdited = b.edited !== null;
     el.style.cssText = `
       left:${x}px; top:${y}px; width:${w}px; min-height:${h}px;
       font-size:${fs}px;
       font-family:${b.fontFamily||'sans-serif'};
       font-weight:${b.fontWeight||'400'};
       font-style:${b.fontStyle||'normal'};
-      color:${b.color||'#fff'};
+      color:${b.color||'#000'};
       text-align:${b.textAlign||'left'};
-      ${isEdited ? `background:${b.bgColor||'#fff'};padding:2px 4px;` : ''}
+      background:${b.bgColor||'#fff'};
     `;
-    // Only render text in the overlay when edited — the image already shows the original
-    el.textContent = isEdited ? b.edited : '';
+    el.textContent = b.edited !== null ? b.edited : b.text;
 
-    // Single tap → select + open edit sheet immediately
-    el.addEventListener('click', () => { selectBlock(b.id); openSheet(); });
-    el.addEventListener('touchend', ev => {
-      ev.preventDefault();
-      selectBlock(b.id); openSheet();
-    });
+    el.addEventListener('click', ev => { ev.stopPropagation(); startEdit(el, b); });
+    el.addEventListener('touchend', ev => { ev.preventDefault(); ev.stopPropagation(); startEdit(el, b); });
     layer.appendChild(el);
   });
 }
+
+/* ── Inline editing ───────────────────────────────────────────────────────── */
+function startEdit(el, b) {
+  if (editingId === b.id) return;
+  if (editingId) finishEdit();
+
+  selId = b.id;
+  editingId = b.id;
+  el.contentEditable = 'plaintext-only';
+  el.classList.add('editing');
+  el.focus();
+  try {
+    const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  } catch(e) {}
+  document.getElementById('inline-done').style.display = 'block';
+  renderList();
+}
+
+function finishEdit() {
+  if (!editingId) return;
+  const b   = blocks.find(x => x.id === editingId);
+  const el  = document.querySelector(`.txt-node[data-id="${editingId}"]`);
+  if (b && el) {
+    const t = (el.innerText || el.textContent || '').trim();
+    b.edited = t !== b.text.trim() ? t : null;
+    el.textContent = b.edited !== null ? b.edited : b.text;
+    el.contentEditable = 'false';
+    el.classList.remove('editing');
+  }
+  editingId = null;
+  document.getElementById('inline-done').style.display = 'none';
+  renderList();
+}
+
+// Tap outside text nodes → finish edit
+document.addEventListener('click', ev => {
+  if (editingId && !ev.target.closest('.txt-node')) finishEdit();
+});
 
 /* ── List ─────────────────────────────────────────────────────────────────── */
 function renderList() {
@@ -1003,7 +1053,11 @@ function renderList() {
         </div>
       </div>
       <div class="txt-row-caret">›</div>`;
-    row.addEventListener('click', ()=>{ selectBlock(b.id); openSheet(); });
+    row.addEventListener('click', ()=>{
+      selectBlock(b.id);
+      const el = document.querySelector(`.txt-node[data-id="${b.id}"]`);
+      if (el) startEdit(el, b);
+    });
     list.appendChild(row);
   });
 }
@@ -1040,6 +1094,7 @@ function deleteSelected() {
   if (b) { b.deleted=true; selId=null; renderOverlays(); renderList(); toast('Block removed'); }
 }
 function resetEdits() {
+  if (editingId) finishEdit();
   blocks.forEach(b=>{ b.deleted=false; b.hidden=false; b.edited=null; });
   selId=null; renderOverlays(); renderList(); toast('All edits reset');
 }
@@ -1050,45 +1105,12 @@ function reAnalyze() {
   analyzeImage();
 }
 
-/* ── Edit sheet ───────────────────────────────────────────────────────────── */
-function openSheet() {
-  if (!selId) { toast('Select a text block first'); return; }
-  const b = blocks.find(b=>b.id===selId);
-  if (!b) return;
-
-  // style row
-  const sr = document.getElementById('style-row');
-  sr.innerHTML = `
-    <div class="style-pill"><span class="sp-icon">🔤</span><span class="sp-val">${b.fontFamily||'sans-serif'}</span></div>
-    <div class="style-pill"><span class="sp-icon">⬛</span><span class="sp-val">${b.fontWeight==='700'||b.fontWeight==='bold'?'Bold':'Regular'}</span></div>
-    ${b.fontStyle==='italic'?'<div class="style-pill"><span class="sp-icon">𝘐</span><span class="sp-val">Italic</span></div>':''}
-    <div class="style-pill">
-      <span class="color-dot" style="background:${b.color||'#fff'}"></span>
-      <span class="sp-val">${b.color||'#fff'}</span>
-    </div>
-    <div class="style-pill"><span class="sp-icon">≡</span><span class="sp-val">${b.textAlign||'left'}</span></div>`;
-
-  document.getElementById('edit-textarea').value = b.edited!==null ? b.edited : b.text;
-  document.getElementById('edit-sheet').classList.add('open');
-  document.getElementById('backdrop').classList.add('open');
-  setTimeout(()=>document.getElementById('edit-textarea').focus(),250);
-}
-function closeSheet() {
-  document.getElementById('edit-sheet').classList.remove('open');
-  document.getElementById('backdrop').classList.remove('open');
-}
-function applyEdit() {
-  if (!selId) return;
-  const b = blocks.find(b=>b.id===selId);
-  if (!b) return;
-  b.edited = document.getElementById('edit-textarea').value;
-  closeSheet(); renderOverlays(); renderList(); toast('✓ Text updated');
-}
-function deleteFromSheet() {
-  if (!selId) return;
-  const b = blocks.find(b=>b.id===selId);
-  if (b) { b.deleted=true; }
-  selId=null; closeSheet(); renderOverlays(); renderList(); toast('Block removed');
+/* ── Tool actions (list panel) ────────────────────────────────────────────── */
+function openEditSelected() {
+  if (!selId) { toast('Tap a text block to edit'); return; }
+  const el = document.querySelector(`.txt-node[data-id="${selId}"]`);
+  const b  = blocks.find(x => x.id === selId);
+  if (el && b) startEdit(el, b);
 }
 
 /* ── Export ───────────────────────────────────────────────────────────────── */
@@ -1153,7 +1175,8 @@ async function exportImage() {
 
 /* ── Navigation ────────────────────────────────────────────────────────────── */
 function goHome() {
-  blocks=[]; selId=null; imgDataUrl=null;
+  editingId=null; blocks=[]; selId=null; imgDataUrl=null;
+  document.getElementById('inline-done').style.display='none';
   document.getElementById('base-img').src='';
   document.getElementById('overlay-layer').querySelectorAll('.txt-node').forEach(n=>n.remove());
   showScreen('screen-home');

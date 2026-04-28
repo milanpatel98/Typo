@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#080809">
+<title>Typo — Edit Text in Photos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --bg:        #080809;
+  --surface:   #111113;
+  --card:      #18181c;
+  --border:    rgba(255,255,255,0.07);
+  --border2:   rgba(255,255,255,0.12);
+  --text:      #f4f4f6;
+  --sub:       rgba(244,244,246,0.45);
+  --muted:     rgba(244,244,246,0.25);
+  --accent:    #FF6B35;
+  --accent-g:  linear-gradient(135deg,#FF6B35,#FF3CAC);
+  --blue:      #4DA3FF;
+  --green:     #36D399;
+  --red:       #FF5370;
+  --radius-sm: 10px;
+  --radius:    16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --font:      'Outfit', system-ui, sans-serif;
+  --serif:     'Instrument Serif', Georgia, serif;
+  --safe-top:  env(safe-area-inset-top, 0px);
+  --safe-bot:  env(safe-area-inset-bottom, 0px);
+  --safe-l:    env(safe-area-inset-left, 0px);
+  --safe-r:    env(safe-area-inset-right, 0px);
+}
+
+html, body {
+  height: 100%; height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════════════════════════════ SCREENS ═══════════════════════════════ */
+.screen {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s cubic-bezier(0.4,0,0.2,1), transform 0.35s cubic-bezier(0.4,0,0.2,1);
+  transform: translateY(12px);
+  will-change: transform, opacity;
+}
+.screen.active {
+  opacity: 1; pointer-events: auto;
+  transform: translateY(0);
+}
+
+/* ═══════════════════════════════ SPLASH / HOME ═══════════════════════════ */
+#screen-home {
+  background: var(--bg);
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--safe-top) + 60px) 28px calc(var(--safe-bot) + 36px);
+  overflow: hidden;
+}
+
+/* animated gradient mesh bg */
+.home-bg {
+  position: absolute; inset: 0; z-index: 0; overflow: hidden;
+  pointer-events: none;
+}
+.orb {
+  position: absolute; border-radius: 50%;
+  filter: blur(80px); opacity: 0.18;
+  animation: drift 12s ease-in-out infinite alternate;
+}
+.orb1 { width: 320px; height: 320px; top: -80px; right: -60px; background: #FF6B35; animation-delay: 0s; }
+.orb2 { width: 260px; height: 260px; bottom: 10%; left: -80px; background: #FF3CAC; animation-delay: -4s; }
+.orb3 { width: 200px; height: 200px; top: 35%; right: 10%; background: #4DA3FF; animation-delay: -8s; }
+@keyframes drift {
+  0% { transform: translate(0,0) scale(1); }
+  100% { transform: translate(30px, 20px) scale(1.12); }
+}
+
+.home-content { z-index: 1; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+.app-wordmark {
+  display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;
+}
+.app-wordmark-icon {
+  width: 72px; height: 72px;
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 22px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06) inset;
+  position: relative; overflow: hidden;
+}
+.app-wordmark-icon::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,107,53,0.15) 0%, transparent 60%);
+}
+.app-name {
+  font-size: 38px; font-weight: 700; letter-spacing: -1.5px;
+  background: linear-gradient(135deg, #fff 40%, rgba(255,255,255,0.5));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.app-tagline {
+  font-family: var(--serif); font-style: italic;
+  font-size: 17px; color: var(--sub); margin-top: 4px; letter-spacing: 0.2px;
+}
+
+.feature-cards {
+  display: flex; flex-direction: column; gap: 10px; width: 100%; margin: 28px 0 32px;
+}
+.feat-card {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  opacity: 0;
+  animation: fadeSlide 0.5s forwards;
+}
+.feat-card:nth-child(1) { animation-delay: 0.15s; }
+.feat-card:nth-child(2) { animation-delay: 0.25s; }
+.feat-card:nth-child(3) { animation-delay: 0.35s; }
+@keyframes fadeSlide {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.feat-icon {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.feat-icon.orange { background: rgba(255,107,53,0.15); }
+.feat-icon.blue   { background: rgba(77,163,255,0.15); }
+.feat-icon.green  { background: rgba(54,211,153,0.15); }
+.feat-label { font-size: 14px; font-weight: 500; }
+.feat-desc  { font-size: 12px; color: var(--sub); margin-top: 2px; }
+
+.cta-area { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+.btn-primary {
+  width: 100%; padding: 16px;
+  background: var(--accent-g);
+  border: none; border-radius: var(--radius);
+  color: #fff; font-family: var(--font); font-size: 16px; font-weight: 600;
+  letter-spacing: -0.2px;
+  cursor: pointer; -webkit-appearance: none;
+  box-shadow: 0 8px 24px rgba(255,107,53,0.35);
+  transition: transform 0.12s, box-shadow 0.12s;
+  position: relative; overflow: hidden;
+}
+.btn-primary::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, transparent 50%);
+  border-radius: inherit;
+}
+.btn-primary:active { transform: scale(0.97); box-shadow: 0 4px 12px rgba(255,107,53,0.25); }
+
+.btn-secondary {
+  width: 100%; padding: 15px;
+  background: transparent;
+  border: 1px solid var(--border2); border-radius: var(--radius);
+  color: var(--sub); font-family: var(--font); font-size: 15px; font-weight: 500;
+  cursor: pointer; -webkit-appearance: none;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-secondary:active { background: var(--card); color: var(--text); }
+
+#file-input { display: none; }
+
+/* ═══════════════════════════════ EDITOR SCREEN ══════════════════════════ */
+#screen-editor {
+  background: var(--bg);
+  padding-top: var(--safe-top);
+}
+
+/* Top nav bar */
+.top-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px 8px;
+  flex-shrink: 0;
+  position: relative; z-index: 10;
+}
+.top-bar-left, .top-bar-right { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: var(--card); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; cursor: pointer; -webkit-appearance: none;
+  transition: background 0.12s, transform 0.1s;
+  color: var(--text);
+}
+.icon-btn:active { transform: scale(0.92); background: var(--border); }
+.icon-btn.primary {
+  background: var(--accent); border-color: transparent;
+  box-shadow: 0 4px 12px rgba(255,107,53,0.3);
+  color: #fff; font-size: 13px; font-weight: 600;
+  width: auto; padding: 0 14px; letter-spacing: -0.2px;
+}
+.icon-btn.primary:active { background: #e55c28; }
+.page-title {
+  font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.3px;
+}
+
+/* Canvas zone */
+.canvas-zone {
+  position: relative; flex-shrink: 0;
+  background: #000;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+#base-img {
+  display: block; max-width: 100%; max-height: 100%;
+  object-fit: contain; user-select: none; pointer-events: none;
+}
+#overlay-layer {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+}
+.txt-node {
+  position: absolute; cursor: pointer; pointer-events: auto;
+  border: 1.5px dashed transparent;
+  border-radius: 4px; padding: 2px 4px;
+  transition: border-color 0.15s, background 0.15s;
+  line-height: 1.15; white-space: pre-wrap;
+  touch-action: manipulation;
+  transform-origin: top left;
+}
+.txt-node:hover  { border-color: rgba(255,107,53,0.4); background: rgba(255,107,53,0.05); }
+.txt-node.sel    { border-color: var(--accent) !important; background: rgba(255,107,53,0.08) !important; border-style: solid !important; }
+.txt-node.hidden-block { opacity: 0.2; pointer-events: none; }
+
+/* Scanning pulse overlay */
+.scan-line {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0; top: 0;
+  animation: scanMove 1.8s ease-in-out infinite;
+}
+@keyframes scanMove {
+  0%   { top: 0%;  opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+.scan-line.hide { display: none; }
+
+/* ── Bottom strip (tool tabs) ── */
+.bottom-strip {
+  flex-shrink: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding-bottom: calc(var(--safe-bot) + 4px);
+}
+
+/* Mode tabs */
+.mode-tabs {
+  display: flex; align-items: center;
+  padding: 8px 12px 0;
+  gap: 4px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.mode-tabs::-webkit-scrollbar { display: none; }
+.mode-tab {
+  flex-shrink: 0;
+  padding: 7px 14px; border-radius: 50px;
+  font-size: 13px; font-weight: 500;
+  color: var(--sub); background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer; -webkit-appearance: none;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.mode-tab.active {
+  background: var(--card); border-color: var(--border2);
+  color: var(--text);
+}
+
+/* Panel area */
+.panel-area {
+  overflow: hidden;
+  transition: height 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ── Text list panel ── */
+#panel-texts {
+  display: none; flex-direction: column;
+  max-height: 35vh; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 12px 6px;
+  gap: 7px;
+}
+#panel-texts.show { display: flex; }
+
+.txt-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  cursor: pointer; transition: all 0.15s;
+  flex-shrink: 0;
+}
+.txt-row.sel { border-color: var(--accent); background: rgba(255,107,53,0.06); }
+.txt-row:active { transform: scale(0.985); }
+.txt-row-num {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: var(--surface); color: var(--muted);
+  font-size: 10px; font-weight: 700; font-family: monospace;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.txt-row.sel .txt-row-num { background: var(--accent); color: #fff; }
+.txt-row-info { flex: 1; min-width: 0; }
+.txt-row-text {
+  font-size: 14px; font-weight: 500; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.txt-row-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+.tag {
+  font-size: 10px; font-weight: 500;
+  padding: 2px 7px; border-radius: 4px;
+  background: rgba(255,255,255,0.06);
+  color: var(--sub);
+}
+.tag.edited { background: rgba(255,107,53,0.15); color: var(--accent); }
+.txt-row-caret { color: var(--muted); font-size: 13px; flex-shrink: 0; }
+
+.txt-empty {
+  text-align: center; padding: 28px 20px; color: var(--muted);
+  font-size: 13px; line-height: 1.7;
+}
+
+/* ── Toolbar panel ── */
+#panel-tools {
+  display: none; align-items: center; gap: 6px;
+  padding: 10px 12px 6px;
+  overflow-x: auto; scrollbar-width: none;
+}
+#panel-tools.show { display: flex; }
+#panel-tools::-webkit-scrollbar { display: none; }
+
+.tool-chip {
+  flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  background: var(--card); border: 1px solid var(--border);
+  cursor: pointer; -webkit-appearance: none;
+  transition: all 0.15s; color: var(--sub);
+  min-width: 60px;
+}
+.tool-chip .tc-icon { font-size: 20px; line-height: 1; }
+.tool-chip .tc-label { font-size: 10px; font-weight: 600; letter-spacing: 0.3px; white-space: nowrap; }
+.tool-chip:active { transform: scale(0.95); }
+.tool-chip.danger { border-color: rgba(255,83,112,0.2); }
+.tool-chip.danger:active { background: rgba(255,83,112,0.1); color: var(--red); }
+.tool-chip.active, .tool-chip:active:not(.danger) { background: rgba(255,107,53,0.1); border-color: rgba(255,107,53,0.3); color: var(--accent); }
+.tc-sep { width: 1px; height: 44px; background: var(--border); flex-shrink: 0; margin: 0 2px; }
+
+/* ═══════════════════════════════ EDIT SHEET ════════════════════════════ */
+.sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0);
+  z-index: 90; pointer-events: none;
+  transition: background 0.3s;
+}
+.sheet-backdrop.open { background: rgba(0,0,0,0.6); pointer-events: auto; }
+
+.sheet {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  border-top: 1px solid var(--border2);
+  z-index: 100;
+  transform: translateY(100%);
+  transition: transform 0.38s cubic-bezier(0.32,0.72,0,1);
+  padding-bottom: calc(var(--safe-bot) + 8px);
+  box-shadow: 0 -20px 60px rgba(0,0,0,0.6);
+  max-height: 90dvh;
+  display: flex; flex-direction: column;
+  will-change: transform;
+}
+.sheet.open { transform: translateY(0); }
+
+.sheet-grabber {
+  width: 36px; height: 4px; border-radius: 2px;
+  background: rgba(255,255,255,0.15);
+  margin: 10px auto 0;
+  flex-shrink: 0;
+}
+
+.sheet-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sheet-title { font-size: 16px; font-weight: 600; letter-spacing: -0.3px; }
+.sheet-close {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: none; cursor: pointer; -webkit-appearance: none;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--sub); font-size: 14px;
+  transition: background 0.15s;
+}
+.sheet-close:active { background: rgba(255,255,255,0.15); }
+
+.sheet-body {
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 16px 18px;
+  flex: 1;
+}
+
+/* Style preview pill row */
+.style-row {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.style-pill {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px;
+  font-size: 12px; font-weight: 500; color: var(--sub);
+}
+.style-pill .sp-icon { font-size: 13px; }
+.style-pill .sp-val { color: var(--text); }
+
+/* Color swatch */
+.color-dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.2);
+  display: inline-block; flex-shrink: 0;
+}
+
+/* Textarea */
+.input-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.8px;
+  text-transform: uppercase; color: var(--muted);
+  margin-bottom: 8px; display: block;
+}
+#edit-textarea {
+  width: 100%; min-height: 90px;
+  background: var(--card); border: 1.5px solid var(--border2);
+  border-radius: var(--radius); padding: 14px;
+  font-family: var(--font); font-size: 16px; font-weight: 400;
+  color: var(--text); outline: none; resize: none;
+  -webkit-appearance: none;
+  transition: border-color 0.18s;
+  line-height: 1.5;
+}
+#edit-textarea:focus { border-color: var(--accent); }
+
+/* Sheet action row */
+.sheet-actions {
+  display: flex; gap: 10px;
+  padding: 12px 18px 4px;
+  flex-shrink: 0;
+}
+.act-del {
+  width: 52px; height: 52px; border-radius: var(--radius);
+  background: rgba(255,83,112,0.1); border: 1px solid rgba(255,83,112,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; cursor: pointer; -webkit-appearance: none;
+  transition: all 0.15s; color: var(--red); flex-shrink: 0;
+}
+.act-del:active { background: rgba(255,83,112,0.2); }
+.act-apply {
+  flex: 1; height: 52px; border-radius: var(--radius);
+  background: var(--accent-g); border: none;
+  color: #fff; font-family: var(--font); font-size: 16px; font-weight: 600;
+  cursor: pointer; -webkit-appearance: none;
+  box-shadow: 0 6px 20px rgba(255,107,53,0.3);
+  transition: transform 0.12s, box-shadow 0.12s;
+  letter-spacing: -0.2px; position: relative; overflow: hidden;
+}
+.act-apply::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, transparent 50%);
+}
+.act-apply:active { transform: scale(0.97); box-shadow: 0 3px 10px rgba(255,107,53,0.2); }
+
+/* ═══════════════════════════════ LOADING ════════════════════════════════ */
+#screen-loading {
+  background: var(--bg);
+  align-items: center; justify-content: center; gap: 24px;
+  flex-direction: column;
+}
+.load-img-preview {
+  width: 140px; height: 140px; border-radius: 24px;
+  overflow: hidden; position: relative;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  border: 1px solid var(--border2);
+}
+.load-img-preview img { width: 100%; height: 100%; object-fit: cover; }
+.load-scan {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom,
+    transparent 0%,
+    rgba(255,107,53,0.18) 45%,
+    rgba(255,107,53,0.35) 50%,
+    rgba(255,107,53,0.18) 55%,
+    transparent 100%);
+  animation: scanFull 1.8s ease-in-out infinite;
+}
+@keyframes scanFull {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+.load-title { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; }
+.load-sub { font-size: 14px; color: var(--sub); letter-spacing: 0.1px; }
+.load-dots { display: flex; gap: 6px; }
+.load-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  animation: dotPulse 1.2s ease-in-out infinite;
+}
+.load-dots span:nth-child(2) { animation-delay: 0.2s; }
+.load-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.4); opacity: 1; }
+}
+
+/* ═══════════════════════════════ TOAST ══════════════════════════════════ */
+#toast-bar {
+  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: rgba(30,30,34,0.95);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border2);
+  border-radius: 50px;
+  padding: 10px 20px;
+  font-size: 13px; font-weight: 500; color: var(--text);
+  z-index: 500; pointer-events: none;
+  opacity: 0; transition: opacity 0.22s, transform 0.22s;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+#toast-bar.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ═══════════════════════════════ UTILS ══════════════════════════════════ */
+.divider { height: 1px; background: var(--border); margin: 14px 0; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ HOME SCREEN ══════════════════════════════════════════ -->
+<div class="screen active" id="screen-home">
+  <div class="home-bg">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+  </div>
+
+  <div class="home-content">
+    <div class="app-wordmark">
+      <div class="app-wordmark-icon">✦</div>
+      <div class="app-name">Typo</div>
+      <div class="app-tagline">Edit text in any photo</div>
+    </div>
+
+    <div class="feature-cards">
+      <div class="feat-card">
+        <div class="feat-icon orange">🔍</div>
+        <div>
+          <div class="feat-label">Smart Detection</div>
+          <div class="feat-desc">AI reads every word, font & style</div>
+        </div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon blue">✏️</div>
+        <div>
+          <div class="feat-label">In-Place Editing</div>
+          <div class="feat-desc">Edit text without losing the look</div>
+        </div>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon green">⬇️</div>
+        <div>
+          <div class="feat-label">Export Ready</div>
+          <div class="feat-desc">Download your edited image instantly</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cta-area">
+    <button class="btn-primary" onclick="document.getElementById('file-input').click()">
+      Choose Photo
+    </button>
+    <button class="btn-secondary" id="paste-btn">Paste from Clipboard</button>
+  </div>
+
+  <input type="file" id="file-input" accept="image/*">
+</div>
+
+<!-- ═══════════════ LOADING SCREEN ════════════════════════════════════════ -->
+<div class="screen" id="screen-loading">
+  <div class="load-img-preview">
+    <img id="load-preview" src="" alt="">
+    <div class="load-scan"></div>
+  </div>
+  <div>
+    <div class="load-title" style="text-align:center">Analyzing photo</div>
+    <div class="load-sub" style="text-align:center;margin-top:5px" id="load-status">Detecting text blocks…</div>
+  </div>
+  <div class="load-dots">
+    <span></span><span></span><span></span>
+  </div>
+</div>
+
+<!-- ═══════════════ EDITOR SCREEN ═════════════════════════════════════════ -->
+<div class="screen" id="screen-editor">
+
+  <!-- Top nav -->
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <button class="icon-btn" onclick="goHome()" title="Back">←</button>
+      <span class="page-title" id="editor-filename">Photo</span>
+    </div>
+    <div class="top-bar-right">
+      <button class="icon-btn" onclick="resetEdits()" title="Undo all">↺</button>
+      <button class="icon-btn primary" onclick="exportImage()">Export</button>
+    </div>
+  </div>
+
+  <!-- Canvas -->
+  <div class="canvas-zone" id="canvas-zone">
+    <img id="base-img" alt="">
+    <div id="overlay-layer">
+      <div class="scan-line hide" id="scan-line"></div>
+    </div>
+  </div>
+
+  <!-- Bottom strip -->
+  <div class="bottom-strip">
+    <!-- Mode tabs -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" onclick="switchTab('texts')" id="tab-texts">Text Blocks</button>
+      <button class="mode-tab" onclick="switchTab('tools')" id="tab-tools">Tools</button>
+    </div>
+
+    <!-- Panel: text list -->
+    <div class="panel-area">
+      <div id="panel-texts" class="show">
+        <div class="txt-empty" id="txt-empty">
+          Tap <strong>Re‑scan</strong> if the image has text that wasn't found.
+        </div>
+      </div>
+
+      <!-- Panel: tools -->
+      <div id="panel-tools">
+        <div class="tool-chip" onclick="openEditSelected()">
+          <span class="tc-icon">✎</span>
+          <span class="tc-label">Edit</span>
+        </div>
+        <div class="tool-chip" onclick="toggleHide()">
+          <span class="tc-icon" id="hide-icon">👁</span>
+          <span class="tc-label">Hide</span>
+        </div>
+        <div class="tc-sep"></div>
+        <div class="tool-chip danger" onclick="deleteSelected()">
+          <span class="tc-icon">🗑</span>
+          <span class="tc-label">Delete</span>
+        </div>
+        <div class="tc-sep"></div>
+        <div class="tool-chip" onclick="reAnalyze()">
+          <span class="tc-icon">🔍</span>
+          <span class="tc-label">Re‑scan</span>
+        </div>
+        <div class="tool-chip" onclick="resetEdits()">
+          <span class="tc-icon">↺</span>
+          <span class="tc-label">Reset</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ EDIT SHEET ════════════════════════════════════════════ -->
+<div class="sheet-backdrop" id="backdrop" onclick="closeSheet()"></div>
+
+<div class="sheet" id="edit-sheet">
+  <div class="sheet-grabber"></div>
+  <div class="sheet-header">
+    <span class="sheet-title">Edit Text</span>
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-body">
+    <!-- Style preview -->
+    <div class="style-row" id="style-row"></div>
+    <div class="divider"></div>
+    <span class="input-label">New text</span>
+    <textarea id="edit-textarea" rows="3" placeholder="Type replacement text…"></textarea>
+  </div>
+  <div class="sheet-actions">
+    <button class="act-del" onclick="deleteFromSheet()" title="Remove block">🗑</button>
+    <button class="act-apply" onclick="applyEdit()">Apply Changes</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast-bar"></div>
+
+<!-- ═══════════════ SCRIPTS ═══════════════════════════════════════════════ -->
+<script>
+/* ── State ─────────────────────────────────────────────────────────────── */
+let imgDataUrl = null, imgFileName = 'photo';
+let blocks = [];          // [{id,text,x,y,w,h,fontSize,fontWeight,fontStyle,fontFamily,color,textAlign,edited,hidden,deleted}]
+let selId   = null;
+let imgNW=0,imgNH=0, imgDW=0,imgDH=0, imgOX=0,imgOY=0;
+
+/* ── Screens ────────────────────────────────────────────────────────────── */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+/* ── File loading ────────────────────────────────────────────────────────── */
+document.getElementById('file-input').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) loadFile(f);
+  e.target.value = '';
+});
+document.getElementById('paste-btn').addEventListener('click', async () => {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith('image/')) {
+          const blob = await item.getType(type);
+          loadFile(new File([blob], 'pasted.png', {type}));
+          return;
+        }
+      }
+    }
+    toast('No image found in clipboard');
+  } catch { toast('Paste not supported here — try Upload'); }
+});
+document.addEventListener('paste', e => {
+  for (const item of (e.clipboardData?.items || [])) {
+    if (item.type.startsWith('image/')) { loadFile(item.getAsFile()); break; }
+  }
+});
+
+function loadFile(file) {
+  imgFileName = file.name.replace(/\.[^.]+$/, '') || 'photo';
+  document.getElementById('editor-filename').textContent = imgFileName;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    imgDataUrl = ev.target.result;
+    document.getElementById('load-preview').src = imgDataUrl;
+    showScreen('screen-loading');
+    analyzeImage();
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ── Analysis ────────────────────────────────────────────────────────────── */
+async function analyzeImage() {
+  blocks = []; selId = null;
+  setLoadStatus('Reading font styles…');
+
+  const base64 = imgDataUrl.split(',')[1];
+  const mime   = (imgDataUrl.match(/data:(image\/[^;]+);/) || [])[1] || 'image/jpeg';
+
+  const prompt = `You are a precise image OCR and layout analyzer.
+Detect ALL visible text in this image. Return a JSON array only — no markdown, no explanation.
+Each element:
+{
+  "id": 1,
+  "text": "exact text",
+  "x": 0.12,   // left edge as fraction of image width 0-1
+  "y": 0.05,   // top  edge as fraction of image height 0-1
+  "w": 0.40,   // width  fraction
+  "h": 0.08,   // height fraction
+  "fontSize": 52,      // px if image height were 1000px
+  "fontWeight": "700", // "400" normal | "700" bold | "300" light etc
+  "fontStyle": "normal", // "normal" | "italic"
+  "fontFamily": "sans-serif", // "sans-serif"|"serif"|"monospace"|"display"|"handwriting"
+  "color": "#ffffff",  // best hex estimate
+  "textAlign": "left"  // "left"|"center"|"right"
+}
+If no text found return [].`;
+
+  try {
+    const res  = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 2000,
+        messages: [{role:'user', content:[
+          {type:'image', source:{type:'base64', media_type:mime, data:base64}},
+          {type:'text',  text: prompt}
+        ]}]
+      })
+    });
+    const data = await res.json();
+
+    // Surface API errors clearly on the loading screen
+    if (data.error) {
+      const msg = data.error.message || JSON.stringify(data.error);
+      console.error('API error:', msg);
+      setLoadStatus('⚠ ' + msg.slice(0, 120));
+      setTimeout(() => showScreen('screen-home'), 4000);
+      return;
+    }
+
+    const raw  = (data.content||[]).find(c=>c.type==='text')?.text || '[]';
+    try {
+      blocks = JSON.parse(raw.replace(/```json|```/g,'').trim())
+        .map((b,i) => ({...b, id:String(b.id||i+1), edited:null, hidden:false, deleted:false}));
+    } catch { blocks = []; }
+    openEditor();
+  } catch(err) {
+    console.error('Fetch error:', err);
+    setLoadStatus('⚠ Network error — ' + String(err).slice(0, 80));
+    setTimeout(() => showScreen('screen-home'), 4000);
+  }
+}
+
+function setLoadStatus(msg) {
+  document.getElementById('load-status').textContent = msg;
+}
+
+/* ── Editor ──────────────────────────────────────────────────────────────── */
+function openEditor() {
+  showScreen('screen-editor');
+  const img = document.getElementById('base-img');
+  img.src = imgDataUrl;
+  img.onload = () => { measureImg(); renderOverlays(); renderList(); };
+  if (img.complete && img.naturalWidth) { measureImg(); renderOverlays(); renderList(); }
+}
+
+/* ── Measurement ─────────────────────────────────────────────────────────── */
+function measureImg() {
+  const img = document.getElementById('base-img');
+  const zone= document.getElementById('canvas-zone');
+  imgNW = img.naturalWidth; imgNH = img.naturalHeight;
+  imgDW = img.offsetWidth;  imgDH = img.offsetHeight;
+  const ir = img.getBoundingClientRect(), zr = zone.getBoundingClientRect();
+  imgOX = ir.left - zr.left; imgOY = ir.top - zr.top;
+
+  // size the canvas zone to image aspect
+  const ar = imgNW / imgNH;
+  const maxH = Math.min(window.innerHeight * 0.52, window.innerWidth / ar);
+  zone.style.height = maxH + 'px';
+}
+window.addEventListener('resize', () => { measureImg(); renderOverlays(); });
+
+/* ── Overlays ─────────────────────────────────────────────────────────────── */
+function renderOverlays() {
+  const layer = document.getElementById('overlay-layer');
+  // remove all txt-node elements
+  layer.querySelectorAll('.txt-node').forEach(n=>n.remove());
+
+  const scaleX = imgDW / imgNW, scaleY = imgDH / imgNH;
+  const sc = Math.min(scaleX, scaleY);
+
+  blocks.filter(b=>!b.deleted).forEach(b => {
+    const el = document.createElement('div');
+    el.className = 'txt-node' + (b.id===selId?' sel':'') + (b.hidden?' hidden-block':'');
+    el.dataset.id = b.id;
+
+    const x  = b.x * imgNW * sc + imgOX;
+    const y  = b.y * imgNH * sc + imgOY;
+    const w  = b.w * imgNW * sc;
+    const h  = b.h * imgNH * sc;
+    const fs = (b.fontSize / 1000) * imgNH * sc;
+
+    el.style.cssText = `
+      left:${x}px; top:${y}px; width:${w}px; min-height:${h}px;
+      font-size:${fs}px;
+      font-family:${b.fontFamily||'sans-serif'};
+      font-weight:${b.fontWeight||'400'};
+      font-style:${b.fontStyle||'normal'};
+      color:${b.color||'#fff'};
+      text-align:${b.textAlign||'left'};
+    `;
+    el.textContent = b.edited !== null ? b.edited : b.text;
+    el.addEventListener('click', () => { selectBlock(b.id); });
+    el.addEventListener('dblclick', () => { selectBlock(b.id); openSheet(); });
+
+    // touch: single tap selects, double tap (300ms) opens sheet
+    let tapTimer=null, tapCount=0;
+    el.addEventListener('touchend', ev => {
+      ev.preventDefault();
+      tapCount++;
+      if (tapCount===1) {
+        tapTimer = setTimeout(()=>{ tapCount=0; selectBlock(b.id); }, 280);
+      } else {
+        clearTimeout(tapTimer); tapCount=0;
+        selectBlock(b.id); openSheet();
+      }
+    });
+    layer.appendChild(el);
+  });
+}
+
+/* ── List ─────────────────────────────────────────────────────────────────── */
+function renderList() {
+  const list  = document.getElementById('panel-texts');
+  const empty = document.getElementById('txt-empty');
+  const vis   = blocks.filter(b=>!b.deleted);
+
+  if (vis.length===0) {
+    empty.style.display='block';
+    list.querySelectorAll('.txt-row').forEach(n=>n.remove());
+    return;
+  }
+  empty.style.display='none';
+  list.querySelectorAll('.txt-row').forEach(n=>n.remove());
+
+  vis.forEach((b,i) => {
+    const row = document.createElement('div');
+    row.className = 'txt-row' + (b.id===selId?' sel':'');
+    row.dataset.id = b.id;
+    const disp = (b.edited!==null?b.edited:b.text)||'';
+    row.innerHTML = `
+      <div class="txt-row-num">${i+1}</div>
+      <div class="txt-row-info">
+        <div class="txt-row-text">${escH(disp)}${b.hidden?' <span style="opacity:.4">·hidden</span>':''}</div>
+        <div class="txt-row-tags">
+          <span class="tag">${b.fontFamily||'sans'}</span>
+          <span class="tag">${b.fontWeight==='700'||b.fontWeight==='bold'?'Bold':'Regular'}</span>
+          ${b.fontStyle==='italic'?'<span class="tag">Italic</span>':''}
+          ${b.edited!==null?'<span class="tag edited">✎ Edited</span>':''}
+        </div>
+      </div>
+      <div class="txt-row-caret">›</div>`;
+    row.addEventListener('click', ()=>{ selectBlock(b.id); openSheet(); });
+    list.appendChild(row);
+  });
+}
+
+function escH(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ── Selection ────────────────────────────────────────────────────────────── */
+function selectBlock(id) {
+  selId = id;
+  renderOverlays(); renderList();
+}
+
+/* ── Tab switching ────────────────────────────────────────────────────────── */
+function switchTab(name) {
+  document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.getElementById('panel-texts').classList.toggle('show', name==='texts');
+  document.getElementById('panel-tools').classList.toggle('show', name==='tools');
+}
+
+/* ── Tool actions ─────────────────────────────────────────────────────────── */
+function openEditSelected() {
+  if (!selId) { toast('Select a text block first'); return; }
+  openSheet();
+}
+function toggleHide() {
+  if (!selId) { toast('Select a text block first'); return; }
+  const b = blocks.find(b=>b.id===selId);
+  if (b) { b.hidden=!b.hidden; renderOverlays(); renderList(); }
+}
+function deleteSelected() {
+  if (!selId) { toast('Select a text block first'); return; }
+  const b = blocks.find(b=>b.id===selId);
+  if (b) { b.deleted=true; selId=null; renderOverlays(); renderList(); toast('Block removed'); }
+}
+function resetEdits() {
+  blocks.forEach(b=>{ b.deleted=false; b.hidden=false; b.edited=null; });
+  selId=null; renderOverlays(); renderList(); toast('All edits reset');
+}
+function reAnalyze() {
+  if (!imgDataUrl) return;
+  document.getElementById('load-preview').src = imgDataUrl;
+  showScreen('screen-loading');
+  analyzeImage();
+}
+
+/* ── Edit sheet ───────────────────────────────────────────────────────────── */
+function openSheet() {
+  if (!selId) { toast('Select a text block first'); return; }
+  const b = blocks.find(b=>b.id===selId);
+  if (!b) return;
+
+  // style row
+  const sr = document.getElementById('style-row');
+  sr.innerHTML = `
+    <div class="style-pill"><span class="sp-icon">🔤</span><span class="sp-val">${b.fontFamily||'sans-serif'}</span></div>
+    <div class="style-pill"><span class="sp-icon">⬛</span><span class="sp-val">${b.fontWeight==='700'||b.fontWeight==='bold'?'Bold':'Regular'}</span></div>
+    ${b.fontStyle==='italic'?'<div class="style-pill"><span class="sp-icon">𝘐</span><span class="sp-val">Italic</span></div>':''}
+    <div class="style-pill">
+      <span class="color-dot" style="background:${b.color||'#fff'}"></span>
+      <span class="sp-val">${b.color||'#fff'}</span>
+    </div>
+    <div class="style-pill"><span class="sp-icon">≡</span><span class="sp-val">${b.textAlign||'left'}</span></div>`;
+
+  document.getElementById('edit-textarea').value = b.edited!==null ? b.edited : b.text;
+  document.getElementById('edit-sheet').classList.add('open');
+  document.getElementById('backdrop').classList.add('open');
+  setTimeout(()=>document.getElementById('edit-textarea').focus(),250);
+}
+function closeSheet() {
+  document.getElementById('edit-sheet').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('open');
+}
+function applyEdit() {
+  if (!selId) return;
+  const b = blocks.find(b=>b.id===selId);
+  if (!b) return;
+  b.edited = document.getElementById('edit-textarea').value;
+  closeSheet(); renderOverlays(); renderList(); toast('✓ Text updated');
+}
+function deleteFromSheet() {
+  if (!selId) return;
+  const b = blocks.find(b=>b.id===selId);
+  if (b) { b.deleted=true; }
+  selId=null; closeSheet(); renderOverlays(); renderList(); toast('Block removed');
+}
+
+/* ── Export ───────────────────────────────────────────────────────────────── */
+async function exportImage() {
+  toast('Compositing…');
+  await new Promise(r=>setTimeout(r,60));
+  try {
+    const img = new Image();
+    await new Promise((res,rej)=>{ img.onload=res; img.onerror=rej; img.src=imgDataUrl; });
+    const cv = document.createElement('canvas');
+    cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+    const ctx=cv.getContext('2d');
+    ctx.drawImage(img,0,0);
+
+    // inpaint deleted/hidden blocks
+    blocks.filter(b=>b.deleted||b.hidden).forEach(b=>{
+      const x=b.x*img.naturalWidth, y=b.y*img.naturalHeight;
+      const w=b.w*img.naturalWidth, h=b.h*img.naturalHeight;
+      const pad=Math.max(8,h*0.6), srcY=Math.max(0,y-pad);
+      if(srcY<y){
+        const oc=document.createElement('canvas'); oc.width=w; oc.height=h;
+        const ox=oc.getContext('2d'); ox.filter='blur(4px)';
+        ox.drawImage(cv,x,srcY,w,pad,0,0,w,h);
+        ctx.drawImage(oc,x,y);
+      } else {
+        const d=ctx.getImageData(Math.max(0,x-6),Math.max(0,y-6),Math.min(w+12,img.naturalWidth),Math.min(h+12,img.naturalHeight));
+        let r=0,g=0,b2=0,c=0;
+        for(let i=0;i<d.data.length;i+=4){r+=d.data[i];g+=d.data[i+1];b2+=d.data[i+2];c++;}
+        ctx.fillStyle=c?`rgb(${r/c|0},${g/c|0},${b2/c|0})`:'#000';
+        ctx.fillRect(x,y,w,h);
+      }
+    });
+
+    // draw edited texts
+    blocks.filter(b=>!b.deleted&&!b.hidden&&b.edited!==null).forEach(b=>{
+      const x=b.x*img.naturalWidth, y=b.y*img.naturalHeight;
+      const w=b.w*img.naturalWidth, h=b.h*img.naturalHeight;
+      const fs=(b.fontSize/1000)*img.naturalHeight;
+      const pad=4; const srcY=Math.max(0,y-pad*3);
+      if(srcY<y){
+        const oc=document.createElement('canvas'); oc.width=w+pad*2; oc.height=h+pad*2;
+        const ox=oc.getContext('2d'); ox.filter='blur(2px)';
+        ox.drawImage(cv,x-pad,srcY,w+pad*2,h+pad*2,0,0,w+pad*2,h+pad*2);
+        ctx.drawImage(oc,x-pad,y-pad);
+      }
+      ctx.save();
+      ctx.font=`${b.fontStyle==='italic'?'italic ':''} ${b.fontWeight||'400'} ${fs}px ${b.fontFamily||'sans-serif'}`;
+      ctx.fillStyle=b.color||'#fff';
+      ctx.textAlign=b.textAlign||'left';
+      ctx.textBaseline='top';
+      const txX = b.textAlign==='right'?x+w:b.textAlign==='center'?x+w/2:x;
+      // word wrap
+      const words=(b.edited||'').split(' ');
+      let line='',ly=y;
+      words.forEach(word=>{
+        const test=line+(line?' ':'')+word;
+        if(ctx.measureText(test).width>w&&line){
+          ctx.fillText(line,txX,ly); line=word; ly+=fs*1.2;
+        } else line=test;
+      });
+      if(line) ctx.fillText(line,txX,ly);
+      ctx.restore();
+    });
+
+    cv.toBlob(blob=>{
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download=imgFileName+'-typo.png';
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+      toast('✓ Saved to Downloads');
+    },'image/png');
+  } catch(e){ toast('Export failed'); console.error(e); }
+}
+
+/* ── Navigation ────────────────────────────────────────────────────────────── */
+function goHome() {
+  blocks=[]; selId=null; imgDataUrl=null;
+  document.getElementById('base-img').src='';
+  document.getElementById('overlay-layer').querySelectorAll('.txt-node').forEach(n=>n.remove());
+  showScreen('screen-home');
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────────────── */
+let _tt;
+function toast(msg) {
+  const t=document.getElementById('toast-bar');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2400);
+}
+</script>
+</body>
+</html>

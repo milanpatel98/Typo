@@ -798,16 +798,17 @@ async function analyzeImage() {
       .map((l, i) => {
         const { x0, y0, x1, y1 } = l.bbox;
         const bw = x1 - x0, bh = y1 - y0;
+        const style = analyzeBlockStyle(ctx, x0, y0, bw, bh);
         return {
           id: String(i + 1),
           text: l.text.trim(),
           x: x0 / W, y: y0 / H,
           w: bw / W,  h: bh / H,
           fontSize: Math.round((bh / H) * 850),
-          fontWeight: '400',
-          fontStyle: 'normal',
+          fontWeight: style.fontWeight,
+          fontStyle: style.fontStyle,
           fontFamily: 'sans-serif',
-          color: sampleTextColor(ctx, x0, y0, bw, bh),
+          color: style.color,
           textAlign: 'left',
           edited: null, hidden: false, deleted: false
         };
@@ -822,20 +823,68 @@ async function analyzeImage() {
   }
 }
 
-function sampleTextColor(ctx, x, y, w, h) {
-  try {
-    const sx = Math.max(0, Math.round(x)), sy = Math.max(0, Math.round(y));
-    const sw = Math.min(Math.round(w), ctx.canvas.width - sx);
-    const sh = Math.min(Math.round(h), ctx.canvas.height - sy);
-    if (sw <= 0 || sh <= 0) return '#000000';
-    const d = ctx.getImageData(sx, sy, sw, sh).data;
-    let lum = 0, count = 0;
-    for (let i = 0; i < d.length; i += 16) {
-      lum += 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-      count++;
+/* ── Pixel-based style analysis ──────────────────────────────────────────── */
+function analyzeBlockStyle(ctx, x0, y0, bw, bh) {
+  const sx = Math.max(0, Math.round(x0)), sy = Math.max(0, Math.round(y0));
+  const sw = Math.min(Math.round(bw), ctx.canvas.width  - sx);
+  const sh = Math.min(Math.round(bh), ctx.canvas.height - sy);
+  if (sw < 4 || sh < 4) return { fontWeight: '400', fontStyle: 'normal', color: '#000000' };
+
+  const d = ctx.getImageData(sx, sy, sw, sh).data;
+  const pixelCount = sw * sh;
+
+  // Average luminance → decide which pixels are text
+  let totalLum = 0;
+  for (let i = 0; i < d.length; i += 4)
+    totalLum += 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+  const avgLum = totalLum / pixelCount;
+  const textIsDark = avgLum > 128;
+
+  // Build binary text mask and accumulate color
+  const mask = new Uint8Array(pixelCount);
+  let textCount = 0, rSum = 0, gSum = 0, bSum = 0;
+  for (let j = 0; j < pixelCount; j++) {
+    const i = j * 4;
+    const lum = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+    const isText = textIsDark ? lum < avgLum * 0.72 : lum > avgLum + (255 - avgLum) * 0.28;
+    if (isText) {
+      mask[j] = 1; textCount++;
+      rSum += d[i]; gSum += d[i+1]; bSum += d[i+2];
     }
-    return (count && lum / count > 128) ? '#000000' : '#ffffff';
-  } catch { return '#000000'; }
+  }
+
+  // Color: mean of classified text pixels
+  const color = textCount > 5
+    ? '#' + [rSum, gSum, bSum]
+        .map(v => Math.round(v / textCount).toString(16).padStart(2, '0')).join('')
+    : (textIsDark ? '#000000' : '#ffffff');
+
+  // Bold: higher stroke density = bolder
+  const density = textCount / pixelCount;
+  const fontWeight = density > 0.25 ? '700' : '400';
+
+  // Italic: linear regression on per-row text centroids
+  let fontStyle = 'normal';
+  if (sh > 8 && textCount > 20) {
+    const centroids = [];
+    for (let y = 0; y < sh; y++) {
+      let xSum = 0, n = 0;
+      for (let x = 0; x < sw; x++) {
+        if (mask[y * sw + x]) { xSum += x; n++; }
+      }
+      if (n > 2) centroids.push({ y, x: xSum / n });
+    }
+    if (centroids.length > 4) {
+      const cnt = centroids.length;
+      const mY = centroids.reduce((s, p) => s + p.y, 0) / cnt;
+      const mX = centroids.reduce((s, p) => s + p.x, 0) / cnt;
+      let num = 0, den = 0;
+      for (const p of centroids) { num += (p.y - mY) * (p.x - mX); den += (p.y - mY) ** 2; }
+      if (Math.abs(den > 1 ? num / den : 0) > 0.18) fontStyle = 'italic';
+    }
+  }
+
+  return { fontWeight, fontStyle, color };
 }
 
 function setLoadStatus(msg) {
